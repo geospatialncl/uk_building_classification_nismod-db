@@ -7,7 +7,7 @@ import json
 import logging
 
 
-def building_classification(LAD_Code_to_be_processed, year):
+def building_classification(user_settings, LAD_Code_to_be_processed, year):
     ### Classification of buildings from OSMM data in NISMOD-DB++
 
     """
@@ -30,9 +30,9 @@ def building_classification(LAD_Code_to_be_processed, year):
 
     ## API call
 
-    queryText = 'https://www.nismod.ac.uk/api/data/mastermap/buildings/get_buildings?building_year=' + year + '&scale=lad&area_codes=' + LAD_Code_to_be_processed  +'&building_use=residential' #https://www.nismod.ac.uk/api/data/mastermap/buildings/get_buildings?building_year=2017&scale=lad&area_codes=E07000008&building_use=residential
+    queryText = user_settings['url']+'/data/mastermap/buildings/get_buildings?building_year=' + year + '&scale=lad&area_codes=' + LAD_Code_to_be_processed  +'&building_use=residential'
 
-    response = requests.get(queryText, auth=('',''))
+    response = requests.get(queryText, auth=(user_settings['user'], user_settings['password']))
 
     #200 = successful
     i = 0
@@ -66,9 +66,9 @@ def building_classification(LAD_Code_to_be_processed, year):
     print("Pre-processing OAs...")
     print("")
 
-    queryText2 = "https://www.nismod.ac.uk/api/data/boundaries/oas_in_lad?lad_codes=" + LAD_Code_to_be_processed
+    queryText2 = user_settings['url']+"/data/boundaries/oas_in_lad?lad_codes=" + LAD_Code_to_be_processed
 
-    response2 = requests.get(queryText2, auth=('',''))
+    response2 = requests.get(queryText2, auth=(user_settings['user'],user_settings['password']))
 
     i = 0
     #OAPolys = {}
@@ -265,8 +265,8 @@ def building_classification(LAD_Code_to_be_processed, year):
                 #print (uploadStr)
                 buildingUpload[building] = currentBuildingType
                 if (i % 1000) == 0:
-                    response = requests.post('https://www.nismod.ac.uk/api/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=('',''), data=buildingUpload) #Type)
+                    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
                     buildingUpload = {}
 
-    response = requests.post('https://www.nismod.ac.uk/api/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=('',''), data=buildingUpload) #Type)
+    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
     logging.debug("Building types uploaded for LAD code " + LAD_Code_to_be_processed)
