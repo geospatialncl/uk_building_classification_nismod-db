@@ -143,7 +143,7 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
 
     sharedBoundariesBuildings = dict((TOID, []) for TOID in buildingTOIDList)   #key: TOID; values: neighbour(s) WITHOUT TERRACES
     #total_buildings_in_OA = 0
-    total_no_of_Buildings: int = 0
+    total_no_of_Buildings = 0
     OAbuildings = []
     i = 0
 
