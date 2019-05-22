@@ -7,9 +7,78 @@ import json
 import logging
 
 
-def building_classification(user_settings, LAD_Code_to_be_processed, year):
-    ### Classification of buildings from OSMM data in NISMOD-DB++
+def get_buildings(user_settings, year, area_code):
+    """"""
+    queryText = user_settings['url'] + '/data/mastermap/buildings/get_buildings?building_year=' + year + '&scale=lad&area_codes=' + area_code + '&building_use=residential'
 
+    response = requests.get(queryText, auth=(user_settings['user'], user_settings['password']))
+
+    # 200 = successful
+    i = 0
+    if response.status_code == 200:
+
+        jsonText = json.loads(response.text)
+        buildingPolys = {}
+        buildingAttributes = {}
+        print("Loading building polygons from API")
+
+        for textLine in jsonText:
+
+            i += 1
+            poly = shapely.wkt.loads(textLine['geom'])
+
+            # check the toid is correct
+            TOID = str(textLine['toid'])
+            if len(TOID) < 16:
+                TOID = "000" + TOID
+
+            buildingPolys[TOID] = poly
+            buildingAttributes[TOID] = textLine
+
+        return buildingPolys, buildingAttributes, i
+
+    else:
+        logging.error("Error reading building data from API. Building query response code is: ", response.status_code)
+        print("Error reading building data from API. Building query response code is: ", response.status_code)
+        return "Error reading building data from API. Building query response code is: %s" % response.status_code
+
+
+def get_oas(user_settings, area_code):
+    """Get output areas in a LAD
+    """
+    queryText2 = user_settings['url'] + "/data/boundaries/oas_in_lad?lad_codes=" + area_code
+
+    response = requests.get(queryText2, auth=(user_settings['user'], user_settings['password']))
+
+    i = 0
+    # OAPolys = {}
+    OA_Attributes = {}
+    OANeigh_Dict = {}
+
+    # 200 = successful
+    if response.status_code == 200:
+
+        jsonText = json.loads(response.text)
+
+        for textLine in jsonText:
+            i += 1
+            poly = shapely.wkt.loads(textLine['geom'])
+
+            OA_code = str(textLine['oa_code'])
+            # OAPolys[OA_code] = poly
+            OA_Attributes[OA_code] = textLine
+            OANeigh_Dict[OA_code] = textLine['oa_neighbours']
+
+        print(i, " OAs loaded successfully")
+        return OA_Attributes, OANeigh_Dict, i
+
+    else:
+        logging.error("Error loading OAs from API. OA query response code is: ", response.status_code)
+        print("Error loading OAs from API. OA query response code is: ", response.status_code)
+        return "Error loading OAs from API. OA query response code is: %s" % response.status_code
+
+
+def building_classification(user_settings, LAD_Code_to_be_processed, year):
     """
     UK Residential Building Classification using NISMOD API
     -------------------------------------------------------
@@ -28,80 +97,15 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     Requires: Shapely, requests, itertools, json.
     """
 
-    ## API call
-
-    queryText = user_settings['url']+'/data/mastermap/buildings/get_buildings?building_year=' + year + '&scale=lad&area_codes=' + LAD_Code_to_be_processed  +'&building_use=residential'
-
-    response = requests.get(queryText, auth=(user_settings['user'], user_settings['password']))
-
-    #200 = successful
-    i = 0
-    if response.status_code == 200:
-
-        #dataReturned = response.text #gets data records returned from API
-        #print('Returned data is: ', dataReturned)
-
-        jsonText = json.loads(response.text)
-        buildingPolys = {}
-        buildingAttributes = {}
-        print("Loading building polygons from API")
-
-        for textLine in jsonText:
-
-            #print(i, 'TOID: ', textLine['toid_number'], ' and Building Class: ', textLine['building_class'])
-            #print(textLine)
-            i += 1
-            poly = shapely.wkt.loads(textLine['geom'])
-            TOID = str(textLine['toid'])
-            if len(TOID) < 16:
-                    TOID = "000" + TOID
-            buildingPolys[TOID] = poly
-            buildingAttributes[TOID] = textLine
-    else:
-        print ("Error reading building data from API. Building query response code is: ", response.status_code)
-        logging.error("Error reading building data from API. Building query response code is: ", response.status_code)
-
+    # API call - get buildings
+    buildingPolys, buildingAttributes, i = get_buildings(user_settings, year, LAD_Code_to_be_processed)
     print(i, " buildings loaded successfully")
 
     print("Pre-processing OAs...")
     print("")
 
-    queryText2 = user_settings['url']+"/data/boundaries/oas_in_lad?lad_codes=" + LAD_Code_to_be_processed
-
-    response2 = requests.get(queryText2, auth=(user_settings['user'],user_settings['password']))
-
-    i = 0
-    #OAPolys = {}
-    OA_Attributes = {}
-    OANeigh_Dict = {}
-
-     #200 = successful
-    if response2.status_code == 200:
-
-        #dataReturned = response2.text #gets data records returned from API
-
-        jsonText = json.loads(response2.text)
-
-
-        print("Loading OA polygons from API")
-
-
-        for textLine in jsonText:
-
-            #print(i, 'TOID: ', textLine['toid_number'], ' and Building Class: ', textLine['building_class'])
-            #print('Line', i, textLine)
-            i += 1
-            poly = shapely.wkt.loads(textLine['geom'])
-            #print (textLine)
-            OA_code = str(textLine['oa_code'])
-            #OAPolys[OA_code] = poly
-            OA_Attributes[OA_code] = textLine
-            OANeigh_Dict[OA_code] = textLine['oa_neighbours']
-            #print ("OA " + OA_code + " has neighbours " + str(OANeigh_Dict[OA_code]))
-        print(i, " OAs loaded successfully")
-    else:
-        print("Error loading OAs from API. OA query response code is: ", response2.status_code)
-        logging.error("Error loading OAs from API. OA query response code is: ", response.status_code)
+    # API call - get census output areas
+    OA_Attributes, OANeigh_Dict, i = get_oas(user_settings, LAD_Code_to_be_processed)
 
     print("There are " + str(len(OA_Attributes)) + " OAs in the loaded dictionary.")
     print("There are " + str(len(buildingPolys)) + " buildings in the loaded dictionary.")
@@ -113,7 +117,6 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     #
 
     buildingTOIDList = buildingAttributes.keys()
-    #buildingsResClass = {}
     buildingNumResAddPoints = {}
 
     for building in buildingTOIDList:
@@ -122,18 +125,14 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
         numResAddPoints = (attributesforBuilding['res_count'])
         buildingNumResAddPoints[building] = numResAddPoints
         building_assigned = False
+
         #Record the buildings in each OA
         for oa in buildingsinOAs.keys():
-            if  buildingOA == oa:
+            if buildingOA == oa:
                 buildingsinOAs[oa].append(building)
                 building_assigned = True
-        if building_assigned == False:
+        if building_assigned is False:
             print('Building ' + str(building) + ' not assigned')
-
-
-    #print ("buildingsinOAs has: %s members" %(len(buildingsinOAs)))
-    # print ("Overview of buildingsinOAs")
-
 
     #
     # Identify the house typology (terrace, semi-detached, detached, flat)
@@ -142,7 +141,6 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     print("Processing building topologies")
 
     sharedBoundariesBuildings = dict((TOID, []) for TOID in buildingTOIDList)   #key: TOID; values: neighbour(s) WITHOUT TERRACES
-    #total_buildings_in_OA = 0
     total_no_of_Buildings = 0
     OAbuildings = []
     i = 0
@@ -150,20 +148,16 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
 
     #Get buildings in each OA
     for key in sorted(buildingsinOAs):
-        #print ("OA = %s has: %s houses" %(key, len(buildingsinOAs[key])))
+
         total_no_of_Buildings += len(buildingsinOAs[key])
         OAbuildings = buildingsinOAs[key]
 
         #Create list of buildings in OA and their polygons
         for buildingTOID1, buildingTOID2 in itertools.permutations(OAbuildings, 2):
             i += 1
-            #if (i % 1000) == 0:
-                #print (str(i) + ": " + str(key))
 
             buildingPolygon1 = buildingPolys[buildingTOID1]
             buildingPolygon2 = buildingPolys[buildingTOID2]
-            #attributesforBuilding1 = (buildingAttributes[buildingTOID1])
-            #attributesforBuilding2 = (buildingAttributes[buildingTOID2])
 
             if shape(buildingPolygon1).touches(shape(buildingPolygon2)):
                 if buildingTOID1 in sharedBoundariesBuildings.keys():
@@ -181,10 +175,6 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
 
     print("Overview of sharedBoundariesBuildings")
     print("Total buildings with neighbours: %s" %(len(sharedBoundariesBuildings)))
-
-    #for key in sorted(sharedBoundariesBuildings)[:100]:
-            #print ("%s touches: %s" %(key, sharedBoundariesBuildings[key]))
-    print("")
 
     connectedBuildings = {}  #key: TOID; values: neighbour(s) to include TERRACES
 
@@ -205,10 +195,6 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                         buildingstoSearch.append(sBuilding2)
         connectedBuildings[buildingTOID] = buildingstoSearch
 
-    #print ("Overview of connectedBuildings")
-
-    #for key in sorted(connectedBuildings)[:2]:
-    #    print ("House %s is in the same block of to: %s" %(key, connectedBuildings[key]))
 
     masterBuildingList = []    #All buildings
 
@@ -238,20 +224,12 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                     buildingType[str(eachBuilding)] = "Flat_D"
                 else:
                     buildingType[str(eachBuilding)] = "Detached"    #doesn't have any connected buildings so must be detached
-                    #print("Found a detached!")
 
-    print("Overview of buildingType")
-
-    for key in sorted(buildingType)[:10]:
-        print("Building %s is: %s" %(key, buildingType[key]))
 
     print("buildingType: %s" %(len(buildingType)))
 
 
-    # Determine number of addresses in building type to identify FlatD, FlatSD, FlatTerr
-
     print("Uploading building types")
-
     OAbuildings = {}
     buildingUpload = {}
     i = 0
@@ -261,11 +239,10 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
             for building in OAbuildings:
                 i += 1
                 currentBuildingType = buildingType[building]
-                #uploadStr = {str(building):str(currentBuildingType)}
-                #print (uploadStr)
+
                 buildingUpload[building] = currentBuildingType
                 if (i % 1000) == 0:
-                    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
+                    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
                     buildingUpload = {}
 
     response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
