@@ -15,4 +15,15 @@ There are also Communal dwellings.
 
 The script assigns a MISTRAL building class and posts the resulting data back to the NISMOD-DB++ database.
 
-Requires: Shapely, requests, itertools, json.
+
+init.txt
+-------------------------------------------
+The script requires a 'init.txt' file to be located in the same directory. This should contain details for connecting to the NISOMD-DB++ API and required there to be three keys, user, password and url. It should look as below:
+user="example_user"
+password="eg_password"
+url="API url"
+
+
+Dependencies
+-------------------------------------------
+shapely, requests, itertools, json
