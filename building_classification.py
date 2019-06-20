@@ -1,6 +1,5 @@
 import requests
-import shapely
-import shapely.wkt
+from shapely import wkt
 from shapely.geometry import Point, Polygon, MultiPolygon, shape, mapping
 import itertools
 import json
@@ -8,7 +7,8 @@ import logging
 
 
 def get_buildings(user_settings, year, area_code):
-    """"""
+    """Get buildings from NISMOD-DB API
+    """
     queryText = user_settings['url'] + '/data/mastermap/buildings/get_buildings?building_year=' + year + '&scale=lad&area_codes=' + area_code + '&building_use=residential'
 
     response = requests.get(queryText, auth=(user_settings['user'], user_settings['password']))
@@ -25,7 +25,7 @@ def get_buildings(user_settings, year, area_code):
         for textLine in jsonText:
 
             i += 1
-            poly = shapely.wkt.loads(textLine['geom'])
+            poly = wkt.loads(textLine['geom'])
 
             # check the toid is correct
             TOID = str(textLine['toid'])
@@ -62,7 +62,7 @@ def get_oas(user_settings, area_code):
 
         for textLine in jsonText:
             i += 1
-            poly = shapely.wkt.loads(textLine['geom'])
+            poly = wkt.loads(textLine['geom'])
 
             OA_code = str(textLine['oa_code'])
             # OAPolys[OA_code] = poly
