@@ -159,12 +159,12 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
         OAbuildings = buildingsinOAs[key]
 
         # add buildings from neighbouring OAs
-        print(OANeigh_Dict.keys())
-        print(OANeigh_Dict[key])
-        print(len(OAbuildings))
+        #print(OANeigh_Dict.keys())
+        #print(OANeigh_Dict[key])
+        #print(len(OAbuildings))
         for neighbour in OANeigh_Dict[key]:
             OAbuildings += buildingsinOAs[neighbour]
-        print(len(OAbuildings))
+        #print(len(OAbuildings))
 
         #Create list of buildings in OA and their polygons
         for buildingTOID1, buildingTOID2 in itertools.permutations(OAbuildings, 2):
@@ -256,13 +256,13 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                 currentBuildingType = buildingType[building]
 
                 buildingUpload[building] = currentBuildingType
-                print(buildingUpload)
-                break
-            break
-                #if (i % 1000) == 0:
-                    #response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
-                    #buildingUpload = {}
+                #print(buildingUpload)
+                #break
+            #break
+                if (i % 1000) == 0:
+                    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
+                    buildingUpload = {}
 
 
-    #response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
+    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
     logging.debug("Building types uploaded for LAD code " + LAD_Code_to_be_processed)
