@@ -1,0 +1,18 @@
+# model-definition.yml
+
+kind: Model
+apiVersion: v1alpha4
+
+metadata:
+  displayName: UK Building Classification
+  name: uk-building-classification-model
+  summary: Derives the building type for residential buildings and writes to NISMOD-DB++
+  description: >
+    Using NISMOD-DB++, derives and writes the structure type of each residential building in the UK.
+  type: model
+
+spec:
+  outputs:
+    datasets:
+      - name: output
+        desc: Output so can upload model
