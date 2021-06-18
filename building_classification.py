@@ -4,13 +4,14 @@ from shapely.geometry import Point, Polygon, MultiPolygon, shape, mapping
 import itertools
 import json
 import logging
+import psycpog2
 
 
 def get_buildings(user_settings, year, area_code):
     """Get buildings from NISMOD-DB API
     """
     #queryText = user_settings['url'] + '/data/mastermap/buildings?building_year=' + year + '&scale=lad&area_codes=' + area_code + '&building_use=residential'
-    queryText = 'https://www.nismod.ac.uk/api/data/mastermap/buildings?scale=%s&area_codes=%s&building_year=2011' % ('lad', area_code)
+    queryText = 'https://www.nismod.ac.uk/api/data/mastermap/buildings?scale=%s&area_codes=%s&building_year=2011&building_use=residential' % ('lad', area_code)
     print(queryText)
     response = requests.get(queryText, auth=(user_settings['user'], user_settings['password']))
 
@@ -98,6 +99,10 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     Requires: Shapely, requests, itertools, json.
     """
 
+    connection = psycopg2.connect(dbname="nismod-mastermap-2011", user="", password="", port=, host='nismod-db.ncl.ac.uk')
+    cursor = connection.cursor()
+
+
     # API call - get buildings
     buildingPolys, buildingAttributes, i = get_buildings(user_settings, year, LAD_Code_to_be_processed)
     print(i, " buildings loaded successfully")
@@ -124,6 +129,10 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
         attributesforBuilding = (buildingAttributes[building])
         buildingOA = attributesforBuilding['oa']
         numResAddPoints = (attributesforBuilding['res_count'])
+        if attributesforBuilding['res_count'] is None: #if the res count is None????
+            print(attributesforBuilding['res_count'])
+            print(attributesforBuilding)
+            exit()
         buildingNumResAddPoints[building] = numResAddPoints
         building_assigned = False
 
@@ -141,128 +150,171 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
 
     print("Processing building topologies")
 
-    sharedBoundariesBuildings = dict((TOID, []) for TOID in buildingTOIDList)   #key: TOID; values: neighbour(s) WITHOUT TERRACES
-    total_no_of_Buildings = 0
-    OAbuildings = []
-    i = 0
+    for oa in OA_Attributes.keys():
+        #oa = 'E00042841'
+        OAoI = [oa]
+        print('Processing %s' %oa)
 
+        sharedBoundariesBuildings = dict((TOID, []) for TOID in buildingTOIDList)   #key: TOID; values: neighbour(s) WITHOUT TERRACES
+        total_no_of_Buildings = 0
+        OAbuildings = []
+        i = 0
 
-    #Get buildings in each OA
-    for key in sorted(buildingsinOAs):
+        #Get buildings in each OA
+        for key in sorted(buildingsinOAs):
 
-        print('Looking at OA %s' %key)
+            if key in OAoI:
+                print('Looking at OA %s' % key)
+                total_no_of_Buildings += len(buildingsinOAs[key])
 
-        total_no_of_Buildings += len(buildingsinOAs[key])
+                # here is where I need to add the buildings from the neighbouring OAs
+                # buildings in OA of interest
+                OAbuildings = buildingsinOAs[key]
 
-        # here is where I need to add the buildings from the neighbouring OAs
-        # buildings in OA of interest
-        OAbuildings = buildingsinOAs[key]
+                # add buildings from neighbouring OAs
+                if try_new:
+                    print('Trying new method')
+                    OAbuildings_ = []
+                    for neighbour in OANeigh_Dict[key]:
+                        OAbuildings_ += buildingsinOAs[neighbour]
 
-        # add buildings from neighbouring OAs
-        #print(OANeigh_Dict.keys())
-        #print(OANeigh_Dict[key])
-        #print(len(OAbuildings))
-        for neighbour in OANeigh_Dict[key]:
-            OAbuildings += buildingsinOAs[neighbour]
-        #print(len(OAbuildings))
+                #Create list of buildings in OA and their polygons
+                # check every possible pair combination of buildings - this is what takes the time
+                for buildingTOID1, buildingTOID2 in itertools.permutations(OAbuildings, 2):
+                    i += 1
 
-        #Create list of buildings in OA and their polygons
-        for buildingTOID1, buildingTOID2 in itertools.permutations(OAbuildings, 2):
-            i += 1
+                    buildingPolygon1 = buildingPolys[buildingTOID1]
+                    buildingPolygon2 = buildingPolys[buildingTOID2]
 
-            buildingPolygon1 = buildingPolys[buildingTOID1]
-            buildingPolygon2 = buildingPolys[buildingTOID2]
+                    if shape(buildingPolygon1).touches(shape(buildingPolygon2)):
+                        if buildingTOID1 in sharedBoundariesBuildings.keys():
+                            if buildingTOID2 in sharedBoundariesBuildings[buildingTOID1]:
+                                pass
+                            else:
+                                sharedBoundariesBuildings[buildingTOID1].append(buildingTOID2)
+                        else:
+                            sharedBoundariesBuildings[buildingTOID1]= buildingTOID2
 
-            if shape(buildingPolygon1).touches(shape(buildingPolygon2)):
-                if buildingTOID1 in sharedBoundariesBuildings.keys():
-                    if buildingTOID2 in sharedBoundariesBuildings[buildingTOID1]:
+                if try_new:
+                    for buildingTOID1 in OAbuildings:
+                        for buildingTOID2 in OAbuildings_:
+                            buildingPolygon1 = buildingPolys[buildingTOID1]
+                            buildingPolygon2 = buildingPolys[buildingTOID2]
+
+                            if shape(buildingPolygon1).touches(shape(buildingPolygon2)):
+                                if buildingTOID1 in sharedBoundariesBuildings.keys():
+                                    if buildingTOID2 in sharedBoundariesBuildings[buildingTOID1]:
+                                        pass
+                                    else:
+                                        sharedBoundariesBuildings[buildingTOID1].append(buildingTOID2)
+                                else:
+                                    sharedBoundariesBuildings[buildingTOID1] = buildingTOID2
+
+        print('')
+
+        print(str(total_no_of_Buildings) + " buildings in OA")
+        print(str(len(OAbuildings)) + " buildings in all OAs")
+        logging.debug(str(total_no_of_Buildings) + " buildings in all OAs")
+        print('')
+
+        print("Overview of sharedBoundariesBuildings")
+        print("Total buildings with neighbours: %s" %(len(sharedBoundariesBuildings)))
+
+        connectedBuildings = {}  #key: TOID; values: neighbour(s) to include TERRACES
+
+        for buildingTOID in sharedBoundariesBuildings.keys():
+
+            buildingstoSearch = []
+
+            buildingstoSearch.extend(sharedBoundariesBuildings[buildingTOID])
+
+            for sBuilding in buildingstoSearch:
+                for sBuilding2 in sharedBoundariesBuildings[sBuilding]:
+                    if sBuilding2 == buildingTOID:
                         pass
                     else:
-                        sharedBoundariesBuildings[buildingTOID1].append(buildingTOID2)
-                else:
-                    sharedBoundariesBuildings[buildingTOID1]= buildingTOID2
-    print('')
+                        if sBuilding2 in buildingstoSearch:
+                            pass
+                        else:
+                            buildingstoSearch.append(sBuilding2)
+            connectedBuildings[buildingTOID] = buildingstoSearch
 
-    print(str(total_no_of_Buildings) + " buildings in OA")
-    print(str(len(OAbuildings)) + " buildings in all OAs")
-    logging.debug(str(total_no_of_Buildings) + " buildings in all OAs")
-    print('')
 
-    print("Overview of sharedBoundariesBuildings")
-    print("Total buildings with neighbours: %s" %(len(sharedBoundariesBuildings)))
+        masterBuildingList = []    #All buildings
 
-    connectedBuildings = {}  #key: TOID; values: neighbour(s) to include TERRACES
+        for oa in buildingsinOAs.keys():
+            if oa in OAoI:
+                for building in buildingsinOAs[oa]:
+                    masterBuildingList.append(building)
 
-    for buildingTOID in sharedBoundariesBuildings.keys():
+        print("masterBuildingList: %s" %(len(masterBuildingList)))
+        print("connectedBuildings: %s" %(len(connectedBuildings)))
 
-        buildingstoSearch = []
+        buildingType = {}     #key: TOID; values: type
 
-        buildingstoSearch.extend(sharedBoundariesBuildings[buildingTOID])
+        for eachBuilding in masterBuildingList:
+            if str(eachBuilding) in connectedBuildings.keys():
+                if len(connectedBuildings[str(eachBuilding)]) >1: # more than one neighbour - must be terraced
 
-        for sBuilding in buildingstoSearch:
-            for sBuilding2 in sharedBoundariesBuildings[sBuilding]:
-                if sBuilding2 == buildingTOID:
-                    pass
-                else:
-                    if sBuilding2 in buildingstoSearch:
-                        pass
+                    if buildingNumResAddPoints[eachBuilding] > 1:
+                        buildingType[str(eachBuilding)] = "Flat_T"
                     else:
-                        buildingstoSearch.append(sBuilding2)
-        connectedBuildings[buildingTOID] = buildingstoSearch
-
-
-    masterBuildingList = []    #All buildings
-
-    for oa in buildingsinOAs.keys():
-        for building in buildingsinOAs[oa]:
-            masterBuildingList.append(building)
-
-    print("masterBuildingList: %s" %(len(masterBuildingList)))
-    print("connectedBuildings: %s" %(len(connectedBuildings)))
-
-    buildingType = {}     #key: TOID; values: type
-
-    for eachBuilding in masterBuildingList:
-        if str(eachBuilding) in connectedBuildings.keys():
-            if len(connectedBuildings[str(eachBuilding)]) >1: # more than one neighbour - must be terraced
-                if buildingNumResAddPoints[eachBuilding] > 1:
-                    buildingType[str(eachBuilding)] = "Flat_T"
+                        buildingType[str(eachBuilding)] = "Terrace"
+                elif len(connectedBuildings[str(eachBuilding)]) == 1:
+                    if buildingNumResAddPoints[eachBuilding] > 1:
+                        buildingType[str(eachBuilding)] = "Flat_SD"
+                    else:
+                        buildingType[str(eachBuilding)] = "Semi-detached" # only one connected building so much be semi-d
                 else:
-                    buildingType[str(eachBuilding)] = "Terrace"
-            elif len(connectedBuildings[str(eachBuilding)]) == 1:
-                if buildingNumResAddPoints[eachBuilding] > 1:
-                    buildingType[str(eachBuilding)] = "Flat_SD"
-                else:
-                    buildingType[str(eachBuilding)] = "Semi-detached" # only one connected building so much be semi-d
-            else:
-                if buildingNumResAddPoints[eachBuilding] > 1:
-                    buildingType[str(eachBuilding)] = "Flat_D"
-                else:
-                    buildingType[str(eachBuilding)] = "Detached"    #doesn't have any connected buildings so must be detached
+                    if buildingNumResAddPoints[eachBuilding] > 1:
+                        buildingType[str(eachBuilding)] = "Flat_D"
+                    else:
+                        buildingType[str(eachBuilding)] = "Detached"    #doesn't have any connected buildings so must be detached
 
 
-    print("buildingType: %s" %(len(buildingType)))
+        print("buildingType: %s" %(len(buildingType)))
+
+        print("Uploading building types")
+        OAbuildings = {}
+        buildingUpload = {}
+        i = 0
 
 
-    print("Uploading building types")
-    OAbuildings = {}
-    buildingUpload = {}
-    i = 0
+        for oa in buildingsinOAs.keys():
+            if oa in OAoI:
+                OAbuildings = buildingsinOAs[oa]
+                for building in OAbuildings:
 
-    for oa in buildingsinOAs.keys():
-            OAbuildings = buildingsinOAs[oa]
-            for building in OAbuildings:
-                i += 1
-                currentBuildingType = buildingType[building]
+                    i += 1
+                    currentBuildingType = buildingType[building]
 
-                buildingUpload[building] = currentBuildingType
-                #print(buildingUpload)
-                #break
-            #break
-                if (i % 1000) == 0:
-                    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
-                    buildingUpload = {}
+                    buildingUpload[building] = currentBuildingType
+                    #print('Data to upload:', buildingUpload)
+                    #break
+
+                    if toid_ in buildingUpload.keys():
+                        print('FOUND BUILDING OF INTEREST')
+                        print(buildingUpload[toid_])
+                        #exit()
+
+                    sql = 'INSERT INTO mastermap2011.buildings_finished SET mistral_building_class=%s WHERE toid = %s;', [currentBuildingType, building]
+                    print(sql)
+                    cursor.execute(sql)
+                    #if (i % 1000) == 0:
+                    #    print('Updating the database')
+                    #    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
+                    #    buildingUpload = {}
+        cursor.commit()
+
+        #response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?data_version=2&data_version_buildings=2&year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
+        #print(response.status_code)
+        #print(response.text)
 
 
-    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
-    logging.debug("Building types uploaded for LAD code " + LAD_Code_to_be_processed)
+
+        logging.debug("Building types uploaded for LAD code " + LAD_Code_to_be_processed)
+        break
+
+try_new = True
+#OAoI = ['E00042841', 'E00042850', 'E00042848']
+toid_ = 'osgb1000038548297'
