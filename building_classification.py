@@ -4,7 +4,7 @@ from shapely.geometry import Point, Polygon, MultiPolygon, shape, mapping
 import itertools
 import json
 import logging
-import psycpog2
+import psycopg2
 
 
 def get_buildings(user_settings, year, area_code):
@@ -99,7 +99,7 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     Requires: Shapely, requests, itertools, json.
     """
 
-    connection = psycopg2.connect(dbname="nismod-mastermap-2011", user="", password="", port=, host='nismod-db.ncl.ac.uk')
+    connection = psycopg2.connect(dbname="nismod-mastermap-2011", user="", password="", port="", host='')
     cursor = connection.cursor()
 
 
@@ -279,7 +279,6 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
         buildingUpload = {}
         i = 0
 
-
         for oa in buildingsinOAs.keys():
             if oa in OAoI:
                 OAbuildings = buildingsinOAs[oa]
@@ -297,14 +296,14 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                         print(buildingUpload[toid_])
                         #exit()
 
-                    sql = 'INSERT INTO mastermap2011.buildings_finished SET mistral_building_class=%s WHERE toid = %s;', [currentBuildingType, building]
-                    print(sql)
+                    sql = "UPDATE buildings_complete SET mistral_building_class_='%s' WHERE toid_number = '%s';" %(currentBuildingType, building[4:])
+                    #print(sql)
                     cursor.execute(sql)
                     #if (i % 1000) == 0:
                     #    print('Updating the database')
                     #    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
                     #    buildingUpload = {}
-        cursor.commit()
+        connection.commit()
 
         #response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?data_version=2&data_version_buildings=2&year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
         #print(response.status_code)
