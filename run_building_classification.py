@@ -41,8 +41,10 @@ def main():
 
     # Get a list of LADs from the NISMOD API to iterate over
     lads = []
-    gors = ['S92000003','W92000004','E12000001','E12000002','E12000003','E12000004','E12000005','E12000006','E12000007','E12000008','E12000009']
-    #gors = ['E12000009', ]
+    #gors = ['S92000003','W92000004','E12000001','E12000002','E12000003','E12000004','E12000005','E12000006','E12000007','E12000008','E12000009']
+    #gors = ['E12000001','E12000002','E12000003','E12000004','E12000005','E12000006','E12000007','E12000008','E12000009']
+    gors = ['E12000001','E12000002']
+
     for gor in gors:
         rstring = 'https://www.nismod.ac.uk/api/data/boundaries/lads_in_gor?gor_codes=%s&export_format=geojson' % (gor)
         response = requests.get(rstring, auth=(usr_settings['user'], usr_settings['password']))
@@ -57,20 +59,11 @@ def main():
     Year = '2011'
     LAD_count = 1
 
-    while LAD_count < len(lads):# response.status_code == 200:
+    #while LAD_count < len(lads):# response.status_code == 200:
+    for lad in lads:
         print("LAD data obtained from API")
-        #logging.debug('LAD data obtained from API')
-        #dataReturned = response.text
 
-        #jsonText = json.loads(dataReturned)
-        #Year = "2011"
-
-        #for textLine in jsonText[327:]: # this needs updating/fixing
-            #print(textLine)
-            #LAD_Code = textLine['lad_code']
-            #LAD_Code = 'E08000020'
-
-        LAD_Code = lads[LAD_count -1]
+        LAD_Code = lad
 
         print("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
         logging.debug("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
@@ -79,6 +72,7 @@ def main():
             result = building_classification.building_classification(usr_settings, LAD_Code, Year)
             #pass
         LAD_count += 1
+
 
     #if result == "Success":
     #    print("All LADs processed successfully.")
