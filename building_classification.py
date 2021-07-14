@@ -7,11 +7,15 @@ import logging
 import psycopg2
 import multiprocessing as mp
 
-def get_buildings(user_settings, year, area_code):
+def get_buildings(user_settings, year, area_code, oa=False):
     """Get buildings from NISMOD-DB API
     """
     #queryText = user_settings['url'] + '/data/mastermap/buildings?building_year=' + year + '&scale=lad&area_codes=' + area_code + '&building_use=residential'
-    queryText = 'https://www.nismod.ac.uk/api/data/mastermap/buildings?scale=%s&area_codes=%s&building_year=2011&building_use=residential' % ('lad', area_code)
+    if oa is False:
+        queryText = 'https://www.nismod.ac.uk/api/data/mastermap/buildings?scale=%s&area_codes=%s&building_year=2011&building_use=residential' % ('lad', area_code)
+    else:
+        queryText = 'https://www.nismod.ac.uk/api/data/mastermap/buildings?scale=%s&area_codes=%s&building_year=2011&building_use=residential' % ('oa', area_code)
+    
     print(queryText)
     response = requests.get(queryText, auth=(user_settings['user'], user_settings['password']))
 
@@ -48,7 +52,7 @@ def get_buildings(user_settings, year, area_code):
 def check_if_oa_done(cursor, oa_code):
     """Check if an OA has already been processed
     """
-    sql =  "SELECT count(toid_number) FROM buildings_complete WHERE mistral_building_class is not null and mistral_building_class_ is null and oa='%s';" %(oa_code)
+    sql =  "SELECT count(toid_number) FROM buildings_complete WHERE mistral_building_class is not null and mistral_building_class_2 is null and oa='%s';" %(oa_code)
     cursor.execute(sql)
     rows = cursor.fetchall()
 
@@ -126,10 +130,10 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
 
     # API call - get buildings
     buildingPolys, buildingAttributes, i = get_buildings(user_settings, year, LAD_Code_to_be_processed)
-    print(i, " buildings loaded successfully")
+    #print(i, " buildings loaded successfully")
 
     print("Pre-processing OAs...")
-    print("")
+    #print("")
 
     # API call - get census output areas
     OA_Attributes, OANeigh_Dict, i = get_oas(user_settings, LAD_Code_to_be_processed)
@@ -138,7 +142,11 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     print("There are " + str(len(buildingPolys)) + " buildings in the loaded dictionary.")
 
     buildingsinOAs = dict((oa, []) for oa in OA_Attributes.keys())
-
+    
+    # check there are buildings and if not, stop and return
+    if len(buildingPolys) == 0:
+        print('No buildings for LAD')
+        exit()
     #
     # Building Polygon Analysis
     #
@@ -170,12 +178,12 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     oas_checked = []
     oas_to_run = list(OA_Attributes.keys())
     while len(oas_to_run) > 0:
-        print('--------------------------')
-        print('Running next batch')
+        print('-------------------- Running next batch -------------------')
         processes = []
       
         for oa in oas_to_run:
-            processes.append(mp.Process(target=processing_method, args=(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_Dict, buildingPolys, buildingAttributes, buildingNumResAddPoints, oa, LAD_Code_to_be_processed)))
+            #if oa=='E00097508':
+            processes.append(mp.Process(target=processing_method, args=(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_Dict, buildingPolys, buildingAttributes, buildingNumResAddPoints, oa, LAD_Code_to_be_processed, user_settings)))
             oas_checked.append(oa)
             oas_to_run.remove(oa)
            
@@ -191,31 +199,24 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     return
 
 
-def processing_method(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_Dict, buildingPolys, buildingAttributes, buildingNumResAddPoints, oa, LAD_Code_to_be_processed):
+def processing_method(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_Dict, buildingPolys, buildingAttributes, buildingNumResAddPoints, oa, LAD_Code_to_be_processed, user_settings):
     
     #
     # Identify the house typology (terrace, semi-detached, detached, flat)
     # Common border to identify house typology (excluding flats) ***WORK***
 
-    print("Processing building topologies -- %s:%s" %(oa, LAD_Code_to_be_processed))
-    connection = psycopg2.connect(dbname="nismod-mastermap-2011", user="", password="", port="", host="")
+    #print("Processing building topologies -- %s:%s" %(oa, LAD_Code_to_be_processed))
+    connection = psycopg2.connect(dbname="", user="", password="", port="", host="")
     cursor = connection.cursor()
 
     if check_if_oa_done(cursor, oa):
         print('Skipping %s' %oa)
         pass
     else:
-        #for oa in OA_Attributes.keys():
-        #if oa is not null:
-        #oa = 'E00042841'
-        # check if oa has already been done and skip if it has
-        #if check_if_oa_done(cursor,oa):
-        #    print('Skipping %s' %oa)
-        #    continue
+        print("Processing building topologies -- %s:%s" %(oa, LAD_Code_to_be_processed))
 
         OAoI = [oa]
-        #print('Processing %s' %oa)
-
+        
         sharedBoundariesBuildings = dict((TOID, []) for TOID in buildingTOIDList)   #key: TOID; values: neighbour(s) WITHOUT TERRACES
         total_no_of_Buildings = 0
         OAbuildings = []
@@ -231,12 +232,25 @@ def processing_method(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_D
                 # here is where I need to add the buildings from the neighbouring OAs
                 # buildings in OA of interest
                 OAbuildings = buildingsinOAs[key]
+                print('Number of initial buildings - %s' %len(OAbuildings))
 
                 # add buildings from neighbouring OAs
                 if try_new:
-                    #print('Trying new method')
+                    print('Trying new method. OA has %s neighbours' %len(OANeigh_Dict[key]))
                     OAbuildings_ = []
-                    for neighbour in OANeigh_Dict[key]:
+                    for neighbour in OANeigh_Dict[key]: 
+
+                        #breaks here if a neighbouring OA is in a different GOR
+                        # would need to make an API call to fetch buildings for OA and add to buildingsinOAs dict
+                        if neighbour not in buildingsinOAs.keys():
+                            # fetch buildings for OA as OA is in different GOR
+                            print('OA outside of GOR %s' %neighbour)
+                            n_buildingPolys, n_buildingAttributes, i = get_buildings(user_settings, 2011, neighbour, oa=True)
+                            print('Adding buildings from OA outside of GOR - %s' %len(n_buildingPolys)) 
+                            buildingPolys = {**buildingPolys, **n_buildingPolys}
+                            # add to buildings dict in case needed for another neighbour later
+                            buildingsinOAs[neighbour] = n_buildingPolys
+
                         OAbuildings_ += buildingsinOAs[neighbour]
 
                 #Create list of buildings in OA and their polygons
@@ -273,13 +287,13 @@ def processing_method(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_D
 
         #print('')
 
-        #print(str(total_no_of_Buildings) + " buildings in OA")
-        #print(str(len(OAbuildings)) + " buildings in all OAs")
+        print(str(len(OAbuildings)) + " buildings in OA")
+        print(str(len(OAbuildings_)) + " buildings in neighbouring OAs")
         logging.debug(str(total_no_of_Buildings) + " buildings in all OAs")
         #print('')
 
         #print("Overview of sharedBoundariesBuildings")
-        #print("Total buildings with neighbours: %s" %(len(sharedBoundariesBuildings)))
+        print("Total buildings with neighbours: %s" %(len(sharedBoundariesBuildings)))
 
         connectedBuildings = {}  #key: TOID; values: neighbour(s) to include TERRACES
 
@@ -333,9 +347,6 @@ def processing_method(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_D
                         buildingType[str(eachBuilding)] = "Detached"    #doesn't have any connected buildings so must be detached
 
 
-        #print("buildingType: %s" %(len(buildingType)))
-
-        print("Uploading building types")
         OAbuildings = {}
         buildingUpload = {}
         i = 0
@@ -343,28 +354,18 @@ def processing_method(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_D
         for oa in buildingsinOAs.keys():
             if oa in OAoI:
                 OAbuildings = buildingsinOAs[oa]
+                print("Uploading building types -- (oa)%s -- %s" %(oa, len(OAbuildings)))
                 for building in OAbuildings:
 
                     i += 1
                     currentBuildingType = buildingType[building]
 
                     buildingUpload[building] = currentBuildingType
-                    #print('Data to upload:', buildingUpload)
-                    #break
 
-
-                    sql = "UPDATE buildings_complete SET mistral_building_class='%s', mistral_building_class_='%s' WHERE toid_number = '%s';" %(currentBuildingType,currentBuildingType, building[4:])
-                    #print(sql)
+                    sql = "UPDATE buildings_complete SET mistral_building_class='%s', mistral_building_class_2='%s' WHERE toid_number = '%s';" %(currentBuildingType,currentBuildingType, building[4:])
                     cursor.execute(sql)
-                    #if (i % 1000) == 0:
-                    #    print('Updating the database')
-                    #    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
-                    #    buildingUpload = {}
+        
         connection.commit()
-
-        #response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?data_version=2&data_version_buildings=2&year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
-        #print(response.status_code)
-        #print(response.text)
 
         cursor.close()
         connection.close()
@@ -372,15 +373,3 @@ def processing_method(OA_Attributes, buildingTOIDList, buildingsinOAs, OANeigh_D
         #break
 
 try_new = True
-import requests
-from shapely import wkt
-from shapely.geometry import Point, Polygon, MultiPolygon, shape, mapping
-import itertools
-import json
-import logging
-import psycopg2
-import multiprocessing as mp
-
-def get_buildings(user_settings, year, area_code):
-    """Get buildings from NISMOD-DB API
-    """

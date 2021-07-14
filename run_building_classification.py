@@ -43,7 +43,9 @@ def main():
     lads = []
     #gors = ['S92000003','W92000004','E12000001','E12000002','E12000003','E12000004','E12000005','E12000006','E12000007','E12000008','E12000009']
     #gors = ['E12000001','E12000002','E12000003','E12000004','E12000005','E12000006','E12000007','E12000008','E12000009']
-    gors = ['E12000001','E12000002']
+    #gors =  ['E12000001', 'E12000002','E12000003','E12000004','E12000005','E12000006','E12000007','E12000008','E12000009']
+    #gors = ['S92000003','W92000004']
+    gors=['E12000001',]
 
     for gor in gors:
         rstring = 'https://www.nismod.ac.uk/api/data/boundaries/lads_in_gor?gor_codes=%s&export_format=geojson' % (gor)
@@ -61,14 +63,16 @@ def main():
 
     #while LAD_count < len(lads):# response.status_code == 200:
     for lad in lads:
-        print("LAD data obtained from API")
-
+        #print("LAD data obtained from API")
+        
         LAD_Code = lad
 
-        print("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
-        logging.debug("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
+        #print("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
+        #logging.debug("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
 
         if len(LAD_Code) == 9:
+        #if LAD_Code=='E06000030' or LAD_Code=='E41000052' or LAD_Code=='E07000046' or LAD_Code=='E07000040':
+        
             result = building_classification.building_classification(usr_settings, LAD_Code, Year)
             #pass
         LAD_count += 1
