@@ -146,8 +146,9 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     OAbuildings = []
     i = 0
 
-
+    i = 0
     #Get buildings in each OA
+    print(len(buildingsinOAs.keys()))
     for key in sorted(buildingsinOAs):
 
         print('Looking at OA %s' %key)
@@ -181,6 +182,9 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                         sharedBoundariesBuildings[buildingTOID1].append(buildingTOID2)
                 else:
                     sharedBoundariesBuildings[buildingTOID1]= buildingTOID2
+        i += 1
+        if i == 5:
+            break
     print('')
 
     print(str(total_no_of_Buildings) + " buildings in OA")
@@ -222,6 +226,7 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
 
     buildingType = {}     #key: TOID; values: type
 
+    # this is where we actually assign a property to each building
     for eachBuilding in masterBuildingList:
         if str(eachBuilding) in connectedBuildings.keys():
             if len(connectedBuildings[str(eachBuilding)]) >1: # more than one neighbour - must be terraced
@@ -239,7 +244,8 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                     buildingType[str(eachBuilding)] = "Flat_D"
                 else:
                     buildingType[str(eachBuilding)] = "Detached"    #doesn't have any connected buildings so must be detached
-
+        else:
+            print('Possible error here')
 
     print("buildingType: %s" %(len(buildingType)))
 
@@ -260,9 +266,9 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                 #break
             #break
                 if (i % 1000) == 0:
-                    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
+                    #response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
                     buildingUpload = {}
 
 
-    response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
+    #response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
     logging.debug("Building types uploaded for LAD code " + LAD_Code_to_be_processed)
