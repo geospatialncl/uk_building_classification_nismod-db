@@ -40,31 +40,33 @@ def main():
     usr_settings = import_config()
 
     # Get a list of LADs from the NISMOD API to iterate over
-    response = requests.get(usr_settings['url']+'/data/boundaries/lads/get_lads?lad_codes=all', auth=(usr_settings['user'], usr_settings['password']))
+    #response = requests.get(usr_settings['url']+'/data/boundaries/lads/get_lads?lad_codes=all', auth=(usr_settings['user'], usr_settings['password']))
 
-    print(response)
-
+    #print(response)
+    Year = '2011'
     LAD_count = 1
 
-    if response.status_code == 200:
+    if LAD_count >= 1:# response.status_code == 200:
         print("LAD data obtained from API")
-        logging.debug('LAD data obtained from API')
-        dataReturned = response.text
+        #logging.debug('LAD data obtained from API')
+        #dataReturned = response.text
 
-        jsonText = json.loads(dataReturned)
-        Year = "2011"
+        #jsonText = json.loads(dataReturned)
+        #Year = "2011"
 
-        for textLine in jsonText[327:]: # this needs updating/fixing
+        #for textLine in jsonText[327:]: # this needs updating/fixing
             # print(textLine)
-            LAD_Code = textLine['lad_code']
+            #LAD_Code = textLine['lad_code']
+        LAD_Code = 'E08000021'
 
-            print("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
-            logging.debug("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
+        print("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
+        logging.debug("Processing LAD " + str(LAD_count) + ", LAD Code " + LAD_Code + " at " + str(time.asctime()))
 
-            result = building_classification.building_classification(usr_settings, LAD_Code, Year)
-            LAD_count += 1
+        result = building_classification.building_classification(usr_settings, LAD_Code, Year)
+        LAD_count += 1
 
-            if result == "Success":
-                print("All LADs processed successfully.")
+        if result == "Success":
+            print("All LADs processed successfully.")
+        #break
 
 main()

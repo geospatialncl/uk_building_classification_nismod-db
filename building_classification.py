@@ -9,8 +9,9 @@ import logging
 def get_buildings(user_settings, year, area_code):
     """Get buildings from NISMOD-DB API
     """
-    queryText = user_settings['url'] + '/data/mastermap/buildings/get_buildings?building_year=' + year + '&scale=lad&area_codes=' + area_code + '&building_use=residential'
-
+    #queryText = user_settings['url'] + '/data/mastermap/buildings?building_year=' + year + '&scale=lad&area_codes=' + area_code + '&building_use=residential'
+    queryText = 'https://www.nismod.ac.uk/api/data/mastermap/buildings?scale=%s&area_codes=%s&building_year=2011' % ('lad', area_code)
+    print(queryText)
     response = requests.get(queryText, auth=(user_settings['user'], user_settings['password']))
 
     # 200 = successful
@@ -149,8 +150,21 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
     #Get buildings in each OA
     for key in sorted(buildingsinOAs):
 
+        print('Looking at OA %s' %key)
+
         total_no_of_Buildings += len(buildingsinOAs[key])
+
+        # here is where I need to add the buildings from the neighbouring OAs
+        # buildings in OA of interest
         OAbuildings = buildingsinOAs[key]
+
+        # add buildings from neighbouring OAs
+        #print(OANeigh_Dict.keys())
+        #print(OANeigh_Dict[key])
+        #print(len(OAbuildings))
+        for neighbour in OANeigh_Dict[key]:
+            OAbuildings += buildingsinOAs[neighbour]
+        #print(len(OAbuildings))
 
         #Create list of buildings in OA and their polygons
         for buildingTOID1, buildingTOID2 in itertools.permutations(OAbuildings, 2):
@@ -169,7 +183,8 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                     sharedBoundariesBuildings[buildingTOID1]= buildingTOID2
     print('')
 
-    print(str(total_no_of_Buildings) + " buildings in all OAs")
+    print(str(total_no_of_Buildings) + " buildings in OA")
+    print(str(len(OAbuildings)) + " buildings in all OAs")
     logging.debug(str(total_no_of_Buildings) + " buildings in all OAs")
     print('')
 
@@ -241,9 +256,13 @@ def building_classification(user_settings, LAD_Code_to_be_processed, year):
                 currentBuildingType = buildingType[building]
 
                 buildingUpload[building] = currentBuildingType
+                #print(buildingUpload)
+                #break
+            #break
                 if (i % 1000) == 0:
                     response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload)
                     buildingUpload = {}
+
 
     response = requests.post(user_settings['url'] + '/data/mastermap/update_building_class?year=' + year + '&building_class=true', auth=(user_settings['user'], user_settings['password']), data=buildingUpload) #Type)
     logging.debug("Building types uploaded for LAD code " + LAD_Code_to_be_processed)
